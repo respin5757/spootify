@@ -1,5 +1,3 @@
-
-
 import cred 
 import requests
 from requests_oauthlib import OAuth2Session
@@ -7,6 +5,11 @@ from requests.auth import HTTPBasicAuth
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+from moodfinder import find_mood
 
 
 #app credentials
@@ -50,62 +53,58 @@ def authorization():
 
 
     #getting features from track id and adding
-    valence, danceability, energy, liveness= 0, 0, 0, 0
+    tempo, speechiness, loudness, instrumentalness, acousticness, valence, danceability, energy, liveness= 0, 0, 0, 0, 0, 0, 0, 0, 0
+    #keeping track of individual song moods
+    x=0
+    song_moods= []
     for ids in track_ids:
         link= "https://api.spotify.com/v1/audio-features/"+ids
         song_feature= spotify.get(link)
         song_feature = song_feature.json()
+        #print(song_feature)
+        tempo+= song_feature["tempo"]
+        speechiness+= song_feature["speechiness"]
+        loudness+= song_feature["loudness"]
+        instrumentalness+= song_feature["instrumentalness"]
+        acousticness+= song_feature["acousticness"]
         valence+= song_feature["valence"]
         danceability+= song_feature["danceability"]
         energy+= song_feature["energy"]
         liveness+= song_feature["liveness"]
+        song_moods.append([tracks_names[x], find_mood([song_feature["tempo"], song_feature["speechiness"],
+                                                      song_feature["loudness"], song_feature["instrumentalness"],
+                                                      song_feature["acousticness"], song_feature["valence"],
+                                                      song_feature["danceability"], song_feature["energy"],
+                                                      song_feature["liveness"]])])
+        x+=1
 
     #finding averages    
+    tempo= tempo/ len(track_ids)
+    speechiness= speechiness/ len(track_ids)
+    loudness= loudness/ len(track_ids)
+    instrumentalness= instrumentalness/ len(track_ids)
+    acousticness= acousticness/ len(track_ids)
     valence= valence/ len(track_ids)
     danceability= danceability/ len(track_ids)
     energy= energy/ len(track_ids)
     liveness= liveness/ len(track_ids)
-    stats= [valence, danceability, energy, liveness]
+    stats= [tempo, speechiness, loudness, instrumentalness, acousticness, valence, danceability, energy, liveness]
+    print(stats)
+    #print("valence: ", valence, "\ndanceability: ", danceability, "\nenergy: ", energy, "\nliveness: ", liveness)
+    return stats, tracks_names, song_moods
     
-    return stats, tracks_names
-    #print("valence: ", valence, "\ndanceability: ", danceability, "\nenergy: ", energy, "\nliveness: ", liveness)   
-
-def mood_finder(stats):
-    if (stats[0]>0.5) & (stats[2]>0.5):
-        return "happy"
-    elif (stats[0]<0.334) & (stats[2]>0.333) & (stats[1]>0.333) & (stats[3]<0.666):
-        return "angsty"
-    else:
-        return "sad"
     
-def plot_stats(stats):     
-    #plotting using matplotlib
-    categories= ['Valence', 'Danceability','Energy','Liveness']
-    categories = [*categories, categories[0]]
-    stats = [*stats, stats[0]]
-    label_loc = np.linspace(start=0, stop=2 * np.pi, num=len(stats))
-    plt.figure(figsize=(8, 8))
-    plt.subplot(polar=True)
-    plt.plot(label_loc, stats)
-    plt.title('Recently-Played Song Features', size=15)
-    lines, labels = plt.thetagrids(np.degrees(label_loc), labels=categories)
-    plt.legend()
-    plt.show()
-
 def main():
     
-    stats, tracks_names= authorization() 
-    print("\nBased on your 20 most recently-played songs, we found that you are most likely feeling",mood_finder(stats),".")
-    val= input("\nWould you like to see your song features' averages? <yes/no> ")
+    stats, tracks_names, song_moods= authorization() 
+    print("\nBased on your 20 most recently-played songs, we found that you are most likely feeling",find_mood(stats),".")
+    val= input("\nWould you like to see more information about your songs? <yes/no> ")
     if val=="yes":
-        #print("songs: ")
-        #for i in tracks_names:
-        #    print(i, end= ', ')
-        plot_stats(stats)
+        for i in song_moods:
+            print(i[0], ': ', i[1])
     elif val=="no":
         print("thank you for trying out my web application!")
     else:
         print("only valid inputs are 'yes' or 'no'")
-
 
 main()
